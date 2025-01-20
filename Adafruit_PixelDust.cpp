@@ -35,21 +35,29 @@ Adafruit_PixelDust::Adafruit_PixelDust(dimension_t w, dimension_t h,
       yMax(h * 256 - 1), n_grains(n), scale(s), elasticity(e), bitmap(NULL),
       grain(NULL), sort(sort) {}
 
-Adafruit_PixelDust::~Adafruit_PixelDust(void) {
-  if (bitmap) {
+Adafruit_PixelDust::~Adafruit_PixelDust(void)
+{
+  if (bitmap)
+  {
     free(bitmap);
     bitmap = NULL;
   }
-  if (grain) {
+  if (grain)
+  {
     free(grain);
     grain = NULL;
   }
 }
 
-bool Adafruit_PixelDust::begin(void) {
+bool Adafruit_PixelDust::begin(void)
+{
+
+  solid_object_bitmap = (uint8_t *)calloc(w8 * height, sizeof(uint8_t));
+
   if ((bitmap))
     return true; // Already allocated
-  if ((bitmap = (uint8_t *)calloc(w8 * height, sizeof(uint8_t)))) {
+  if ((bitmap = (uint8_t *)calloc(w8 * height, sizeof(uint8_t))))
+  {
     if ((!n_grains) || (grain = (Grain *)calloc(n_grains, sizeof(Grain))))
       return true; // Success
     free(bitmap);  // Second alloc failed; free first-alloc data too
@@ -59,7 +67,8 @@ bool Adafruit_PixelDust::begin(void) {
 }
 
 bool Adafruit_PixelDust::setPosition(grain_count_t i, dimension_t x,
-                                     dimension_t y) {
+                                     dimension_t y)
+{
   if (getPixel(x, y))
     return false; // Position already occupied
   setPixel(x, y);
@@ -68,18 +77,59 @@ bool Adafruit_PixelDust::setPosition(grain_count_t i, dimension_t x,
   return true;
 }
 
+void Adafruit_PixelDust::getPositionSolidObject(int i, dimension_t *x,
+                                                dimension_t *y)
+{
+  *x = this->solid_objects[i].x;
+  *y = this->solid_objects[i].y;
+}
+
 void Adafruit_PixelDust::getPosition(grain_count_t i, dimension_t *x,
-                                     dimension_t *y) const {
+                                     dimension_t *y)
+{
   *x = grain[i].x / 256;
   *y = grain[i].y / 256;
 }
 
 // Fill grain structures with random positions, making sure no two are
 // in the same location.
-void Adafruit_PixelDust::randomize(void) {
-  for (grain_count_t i = 0; i < n_grains; i++) {
+void Adafruit_PixelDust::randomize(void)
+{
+  for (grain_count_t i = 0; i < n_grains; i++)
+  {
+    grain[i].gx = random(1000000);
+    grain[i].gy = random(1000000);
     while (!setPosition(i, random(width), random(height)))
       ;
+  }
+}
+
+bool Adafruit_PixelDust::generate_solid_object(int num_solid_pixels)
+{
+  this->solid_objects = new SolidObject[num_solid_pixels];
+  return true;
+}
+
+bool Adafruit_PixelDust::setSolidObject(int n, dimension_t x, dimension_t y)
+{
+  // spot already used, place somewhere else
+  if (this->getPixelSolidObject(x, y) | this->getPixel(x, y))
+  {
+    return false;
+  }
+
+  this->solid_objects[n].x = x;
+  this->solid_objects[n].y = y;
+  this->setPixelSolidObject(x, y);
+
+  return true;
+}
+
+void Adafruit_PixelDust::move_up(void)
+{
+  for (grain_count_t i = 0; i < n_grains; i++)
+  {
+    grain[i].gx = 9000;
   }
 }
 
@@ -94,15 +144,18 @@ static const uint8_t PROGMEM clr[] = {~0x80, ~0x40, ~0x20, ~0x10,
                              set[] = {0x80, 0x40, 0x20, 0x10,
                                       0x08, 0x04, 0x02, 0x01};
 
-void Adafruit_PixelDust::setPixel(dimension_t x, dimension_t y) {
+void Adafruit_PixelDust::setPixel(dimension_t x, dimension_t y)
+{
   bitmap[y * w8 + x / 8] |= pgm_read_byte(&set[x & 7]);
 }
 
-void Adafruit_PixelDust::clearPixel(dimension_t x, dimension_t y) {
+void Adafruit_PixelDust::clearPixel(dimension_t x, dimension_t y)
+{
   bitmap[y * w8 + x / 8] &= pgm_read_byte(&clr[x & 7]);
 }
 
-bool Adafruit_PixelDust::getPixel(dimension_t x, dimension_t y) const {
+bool Adafruit_PixelDust::getPixel(dimension_t x, dimension_t y) const
+{
   return bitmap[y * w8 + x / 8] & pgm_read_byte(&set[x & 7]);
 }
 
@@ -110,23 +163,54 @@ bool Adafruit_PixelDust::getPixel(dimension_t x, dimension_t y) const {
 
 // Most other architectures will perform better with shifts.
 
-void Adafruit_PixelDust::setPixel(dimension_t x, dimension_t y) {
+void Adafruit_PixelDust::setPixelSolidObject(dimension_t x, dimension_t y)
+{
+  solid_object_bitmap[y * w8 + x / 8] |= (0x80 >> (x & 7));
+}
+
+void Adafruit_PixelDust::clearPixelSolidObject(dimension_t x, dimension_t y)
+{
+  solid_object_bitmap[y * w8 + x / 8] &= (0x7F7F >> (x & 7));
+}
+
+bool Adafruit_PixelDust::getPixelSolidObject(dimension_t x, dimension_t y)
+{
+  return solid_object_bitmap[y * w8 + x / 8] & (0x80 >> (x & 7));
+}
+
+void Adafruit_PixelDust::setPixel(dimension_t x, dimension_t y)
+{
   bitmap[y * w8 + x / 8] |= (0x80 >> (x & 7));
 }
 
-void Adafruit_PixelDust::clearPixel(dimension_t x, dimension_t y) {
+void Adafruit_PixelDust::clearPixel(dimension_t x, dimension_t y)
+{
   bitmap[y * w8 + x / 8] &= (0x7F7F >> (x & 7));
 }
 
-bool Adafruit_PixelDust::getPixel(dimension_t x, dimension_t y) const {
+bool Adafruit_PixelDust::getPixel(dimension_t x, dimension_t y)
+{
   return bitmap[y * w8 + x / 8] & (0x80 >> (x & 7));
+}
+
+void Adafruit_PixelDust::explode(void)
+{
+  const double velocity = 9000;
+  for (int n = 0; n < this->n_grains; n++)
+  {
+    int angle = random(360);
+
+    this->grain[n].gx = int(cos(angle) * velocity);
+    this->grain[n].gy = int(sin(angle) * velocity);
+  }
 }
 
 #endif // !__AVR__
 
 // Clears bitmap buffer.  Grain positions are unchanged,
 // probably want to follow up with some place() calls.
-void Adafruit_PixelDust::clear(void) {
+void Adafruit_PixelDust::clear(void)
+{
   if (bitmap)
     memset(bitmap, 0, w8 * height);
 }
@@ -138,28 +222,36 @@ void Adafruit_PixelDust::clear(void) {
 // approximation is 'good enough' and quick to compute.  A separate optimized
 // function is provided for each of the 8 directions.
 
-static int compare0(const void *a, const void *b) {
+static int compare0(const void *a, const void *b)
+{
   return ((Grain *)b)->x - ((Grain *)a)->x;
 }
-static int compare1(const void *a, const void *b) {
+static int compare1(const void *a, const void *b)
+{
   return ((Grain *)b)->x + ((Grain *)b)->y - ((Grain *)a)->x - ((Grain *)a)->y;
 }
-static int compare2(const void *a, const void *b) {
+static int compare2(const void *a, const void *b)
+{
   return ((Grain *)b)->y - ((Grain *)a)->y;
 }
-static int compare3(const void *a, const void *b) {
+static int compare3(const void *a, const void *b)
+{
   return ((Grain *)a)->x - ((Grain *)a)->y - ((Grain *)b)->x + ((Grain *)b)->y;
 }
-static int compare4(const void *a, const void *b) {
+static int compare4(const void *a, const void *b)
+{
   return ((Grain *)a)->x - ((Grain *)b)->x;
 }
-static int compare5(const void *a, const void *b) {
+static int compare5(const void *a, const void *b)
+{
   return ((Grain *)a)->x + ((Grain *)a)->y - ((Grain *)b)->x - ((Grain *)b)->y;
 }
-static int compare6(const void *a, const void *b) {
+static int compare6(const void *a, const void *b)
+{
   return ((Grain *)a)->y - ((Grain *)b)->y;
 }
-static int compare7(const void *a, const void *b) {
+static int compare7(const void *a, const void *b)
+{
   return ((Grain *)b)->x - ((Grain *)b)->y - ((Grain *)a)->x + ((Grain *)a)->y;
 }
 static int (*compare[8])(const void *a, const void *b) = {
@@ -167,7 +259,8 @@ static int (*compare[8])(const void *a, const void *b) = {
     compare4, compare5, compare6, compare7};
 
 // Calculate one frame of particle interactions
-void Adafruit_PixelDust::iterate(int16_t ax, int16_t ay, int16_t az) {
+void Adafruit_PixelDust::iterate(int16_t ax, int16_t ay, int16_t az)
+{
 
   ax = (int32_t)ax * scale / 256;       // Scale down raw accelerometer
   ay = (int32_t)ay * scale / 256;       // inputs to manageable range.
@@ -184,7 +277,8 @@ void Adafruit_PixelDust::iterate(int16_t ax, int16_t ay, int16_t az) {
 
   grain_count_t i;
 
-  if (sort) {
+  if (sort)
+  {
     int8_t q;
     q = (int)(atan2(ay, ax) * 8.0 / M_PI); // -8 to +8
     if (q >= 0)
@@ -200,20 +294,22 @@ void Adafruit_PixelDust::iterate(int16_t ax, int16_t ay, int16_t az) {
   // Apply 2D accel vector to grain velocities...
   int32_t v2; // Velocity squared
   float v;    // Absolute velocity
-  for (i = 0; i < n_grains; i++) {
-    grain[i].vx += ax + random(az2);
-    grain[i].vy += ay + random(az2);
+  for (i = 0; i < n_grains; i++)
+  {
+    grain[i].gx += ax + random(az2);
+    grain[i].gy += ay + random(az2);
     // Terminal velocity (in any direction) is 256 units -- equal to
     // 1 pixel -- which keeps moving grains from passing through each other
     // and other such mayhem.  Though it takes some extra math, velocity is
     // clipped as a 2D vector (not separately-limited X & Y) so that
     // diagonal movement isn't faster than horizontal/vertical.
     v2 =
-        (int32_t)grain[i].vx * grain[i].vx + (int32_t)grain[i].vy * grain[i].vy;
-    if (v2 > 65536) {      // If v^2 > 65536, then v > 256
-      v = sqrt((float)v2); // Velocity vector magnitude
-      grain[i].vx = (int)(256.0 * (float)grain[i].vx / v); // Maintain heading &
-      grain[i].vy = (int)(256.0 * (float)grain[i].vy / v); // limit magnitude
+        (int32_t)grain[i].gx * grain[i].gx + (int32_t)grain[i].gy * grain[i].gy;
+    if (v2 > 65536)
+    {                                                      // If v^2 > 65536, then v > 256
+      v = sqrt((float)v2);                                 // Velocity vector magnitude
+      grain[i].gx = (int)(256.0 * (float)grain[i].gx / v); // Maintain heading &
+      grain[i].gy = (int)(256.0 * (float)grain[i].gy / v); // limit magnitude
     }
   }
 
@@ -235,22 +331,30 @@ void Adafruit_PixelDust::iterate(int16_t ax, int16_t ay, int16_t az) {
   int32_t oldidx, newidx, delta;
 #endif
 
-  for (i = 0; i < n_grains; i++) {
-    newx = grain[i].x + grain[i].vx; // New position in grain space
-    newy = grain[i].y + grain[i].vy;
-    if (newx < 0) {        // If grain would go out of bounds
+  for (i = 0; i < n_grains; i++)
+  {
+    newx = grain[i].x + grain[i].gx; // New position in grain space
+    newy = grain[i].y + grain[i].gy;
+    if (newx < 0)
+    {                      // If grain would go out of bounds
       newx = 0;            // keep it inside,
-      BOUNCE(grain[i].vx); // and bounce off wall
-    } else if (newx > xMax) {
-      newx = xMax;
-      BOUNCE(grain[i].vx);
+      BOUNCE(grain[i].gx); // and bounce off wall
     }
-    if (newy < 0) {
+    else if (newx > xMax)
+    {
+      newx = xMax;
+      newx = 0;
+      // BOUNCE(grain[i].gx);
+    }
+    if (newy < 0)
+    {
       newy = 0;
-      BOUNCE(grain[i].vy);
-    } else if (newy > yMax) {
+      BOUNCE(grain[i].gy);
+    }
+    else if (newy > yMax)
+    {
       newy = yMax;
-      BOUNCE(grain[i].vy);
+      BOUNCE(grain[i].gy);
     }
 
     // oldidx/newidx are the prior and new pixel index for this grain.
@@ -258,55 +362,151 @@ void Adafruit_PixelDust::iterate(int16_t ax, int16_t ay, int16_t az) {
     oldidx = (grain[i].y / 256) * width + (grain[i].x / 256);
     newidx = (newy / 256) * width + (newx / 256);
 
+    int diff_idx;
+
     if ((oldidx != newidx) && // If grain is moving to a new pixel...
-        getPixel(newx / 256, newy / 256)) { // but if pixel already occupied...
-      delta = abs(newidx - oldidx);         // What direction when blocked?
-      if (delta == 1) {                     // 1 pixel left or right)
-        newx = grain[i].x;                  // Cancel X motion
-        BOUNCE(grain[i].vx);                // and bounce X velocity (Y is OK)
-      } else if (delta == width) {          // 1 pixel up or down
-        newy = grain[i].y;                  // Cancel Y motion
-        BOUNCE(grain[i].vy);                // and bounce Y velocity (X is OK)
-      } else { // Diagonal intersection is more tricky...
+        getPixel(newx / 256, newy / 256))
+    {                               // but if pixel already occupied...
+      delta = abs(newidx - oldidx); // What direction when blocked?
+      if (delta == 1)
+      {                      // 1 pixel left or right)
+        newx = grain[i].x;   // Cancel X motion
+        BOUNCE(grain[i].gx); // and bounce X velocity (Y is OK)
+      }
+      else if (delta == width)
+      {                      // 1 pixel up or down
+        newy = grain[i].y;   // Cancel Y motion
+        BOUNCE(grain[i].gy); // and bounce Y velocity (X is OK)
+      }
+      else
+      { // Diagonal intersection is more tricky...
         // Try skidding along just one axis of motion if possible
         // (start w/faster axis).
-        if (abs(grain[i].vx) >= abs(grain[i].vy)) {      // X axis is faster
-          if (!getPixel(newx / 256, grain[i].y / 256)) { // newx, oldy
+        if (abs(grain[i].gx) >= abs(grain[i].gy))
+        { // X axis is faster
+          if (!getPixel(newx / 256, grain[i].y / 256))
+          { // newx, oldy
             // That pixel's free!  Take it!  But...
             newy = grain[i].y;   // Cancel Y motion
-            BOUNCE(grain[i].vy); // and bounce Y velocity
-          } else {               // X pixel is taken, so try Y...
-            if (!getPixel(grain[i].x / 256, newy / 256)) { // oldx, newy
+            BOUNCE(grain[i].gy); // and bounce Y velocity
+          }
+          else
+          { // X pixel is taken, so try Y...
+            if (!getPixel(grain[i].x / 256, newy / 256))
+            { // oldx, newy
               // Pixel is free, take it, but first...
               newx = grain[i].x;   // Cancel X motion
-              BOUNCE(grain[i].vx); // and bounce X velocity
-            } else {               // Both spots are occupied
-              newx = grain[i].x;   // Cancel X & Y motion
+              BOUNCE(grain[i].gx); // and bounce X velocity
+            }
+            else
+            {                    // Both spots are occupied
+              newx = grain[i].x; // Cancel X & Y motion
               newy = grain[i].y;
-              BOUNCE(grain[i].vx); // Bounce X & Y velocity
-              BOUNCE(grain[i].vy);
+              BOUNCE(grain[i].gx); // Bounce X & Y velocity
+              BOUNCE(grain[i].gy);
             }
           }
-        } else { // Y axis is faster, start there
-          if (!getPixel(grain[i].x / 256, newy / 256)) { // oldx, newy
+        }
+        else
+        { // Y axis is faster, start there
+          if (!getPixel(grain[i].x / 256, newy / 256))
+          { // oldx, newy
             // Pixel's free!  Take it!  But...
             newx = grain[i].x;   // Cancel X motion
-            BOUNCE(grain[i].vx); // and bounce X velocity
-          } else {               // Y pixel is taken, so try X...
-            if (!getPixel(newx / 256, grain[i].y / 256)) { // newx, oldy
+            BOUNCE(grain[i].gx); // and bounce X velocity
+          }
+          else
+          { // Y pixel is taken, so try X...
+            if (!getPixel(newx / 256, grain[i].y / 256))
+            { // newx, oldy
               // Pixel is free, take it, but first...
               newy = grain[i].y;   // Cancel Y motion
-              BOUNCE(grain[i].vy); // and bounce Y velocity
-            } else {               // Both spots are occupied
-              newx = grain[i].x;   // Cancel X & Y motion
+              BOUNCE(grain[i].gy); // and bounce Y velocity
+            }
+            else
+            {                    // Both spots are occupied
+              newx = grain[i].x; // Cancel X & Y motion
               newy = grain[i].y;
-              BOUNCE(grain[i].vx); // Bounce X & Y velocity
-              BOUNCE(grain[i].vy);
+              BOUNCE(grain[i].gx); // Bounce X & Y velocity
+              BOUNCE(grain[i].gy);
             }
           }
         }
       }
     }
+
+    if ((oldidx != newidx) && getPixelSolidObject(newx / 256, newy / 256))
+    {
+      {                               // but if pixel already occupied...
+        delta = abs(newidx - oldidx); // What direction when blocked?
+        if (delta == 1)
+        {                      // 1 pixel left or right)
+          newx = grain[i].x;   // Cancel X motion
+          BOUNCE(grain[i].gx); // and bounce X velocity (Y is OK)
+        }
+        else if (delta == width)
+        {                      // 1 pixel up or down
+          newy = grain[i].y;   // Cancel Y motion
+          BOUNCE(grain[i].gy); // and bounce Y velocity (X is OK)
+        }
+        else
+        { // Diagonal intersection is more tricky...
+          // Try skidding along just one axis of motion if possible
+          // (start w/faster axis).
+          if (abs(grain[i].gx) >= abs(grain[i].gy))
+          { // X axis is faster
+            if (!getPixel(newx / 256, grain[i].y / 256))
+            { // newx, oldy
+              // That pixel's free!  Take it!  But...
+              newy = grain[i].y;   // Cancel Y motion
+              BOUNCE(grain[i].gy); // and bounce Y velocity
+            }
+            else
+            { // X pixel is taken, so try Y...
+              if (!getPixel(grain[i].x / 256, newy / 256))
+              { // oldx, newy
+                // Pixel is free, take it, but first...
+                newx = grain[i].x;   // Cancel X motion
+                BOUNCE(grain[i].gx); // and bounce X velocity
+              }
+              else
+              {                    // Both spots are occupied
+                newx = grain[i].x; // Cancel X & Y motion
+                newy = grain[i].y;
+                BOUNCE(grain[i].gx); // Bounce X & Y velocity
+                BOUNCE(grain[i].gy);
+              }
+            }
+          }
+          else
+          { // Y axis is faster, start there
+            if (!getPixel(grain[i].x / 256, newy / 256))
+            { // oldx, newy
+              // Pixel's free!  Take it!  But...
+              newx = grain[i].x;   // Cancel X motion
+              BOUNCE(grain[i].gx); // and bounce X velocity
+            }
+            else
+            { // Y pixel is taken, so try X...
+              if (!getPixel(newx / 256, grain[i].y / 256))
+              { // newx, oldy
+                // Pixel is free, take it, but first...
+                newy = grain[i].y;   // Cancel Y motion
+                BOUNCE(grain[i].gy); // and bounce Y velocity
+              }
+              else
+              {                    // Both spots are occupied
+                newx = grain[i].x; // Cancel X & Y motion
+                newy = grain[i].y;
+                BOUNCE(grain[i].gx); // Bounce X & Y velocity
+                BOUNCE(grain[i].gy);
+              }
+            }
+          }
+        }
+      }
+    }
+
     clearPixel(grain[i].x / 256, grain[i].y / 256); // Clear old spot
     grain[i].x = newx;                              // Update grain position
     grain[i].y = newy;
